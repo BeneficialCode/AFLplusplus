@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include "config.h"
 
+// 数据类型说明
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;

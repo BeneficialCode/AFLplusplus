@@ -137,7 +137,7 @@ static void edit_params(int argc, char **argv) {
     FATAL("Too many parameters passed to as");
 
   }
-
+  // 确定as程序的名字，默认是GNU as，但是用户也可以提供AFL_AS来覆盖
   as_params[0] = afl_as ? afl_as : (u8 *)"as";
 
   as_params[argc] = 0;
@@ -190,7 +190,7 @@ static void edit_params(int argc, char **argv) {
       continue;
 
 #endif                                                         /* __APPLE__ */
-
+    // 将自己的程序的argv原样传给as
     as_params[as_par_cnt++] = argv[i];
 
   }
@@ -251,7 +251,7 @@ static void edit_params(int argc, char **argv) {
     }
 
   }
-
+  // 设置临时文件modified_file路径为/tmp/.afl-pid-timestamp.s
   modified_file = alloc_printf("%s/.afl-%u-%u-%u.s", tmp_dir, (u32)getpid(),
                                (u32)time(NULL), (u32)random());
 
@@ -299,7 +299,7 @@ static void add_instrumentation(void) {
   if (outfd < 0) { PFATAL("Unable to write to '%s'", modified_file); }
 
   outf = fdopen(outfd, "w");
-
+  // 验证文件是否可写
   if (!outf) { PFATAL("fdopen() failed"); }
 
   while (fgets(line, MAX_LINE, inf)) {
@@ -347,7 +347,7 @@ static void add_instrumentation(void) {
           !strncmp(line + 2, "section\t.text", 13) ||
           !strncmp(line + 2, "section\t__TEXT,__text", 21) ||
           !strncmp(line + 2, "section __TEXT,__text", 21)) {
-
+        // instr_ok表示是否位于代码段
         instr_ok = 1;
         continue;
 
@@ -428,7 +428,7 @@ static void add_instrumentation(void) {
     if (line[0] == '\t') {
 
       if (line[1] == 'j' && line[2] != 'm' && R(100) < (long)inst_ratio) {
-
+        // \tj[^m]格式的指令为条件跳转指令
         fprintf(outf, use_64bit ? trampoline_fmt_64 : trampoline_fmt_32,
                 R(MAP_SIZE));
 
@@ -555,6 +555,10 @@ int main(int argc, char **argv) {
   s32 pid;
   u32 rand_seed, i, j;
   int status;
+  /* 
+     该环境变量主要控制检测每个分支的概率，取值为0到100%,
+     设置为0时则只检测函数入口的跳转，而不会检测函数分支的跳转。
+  */
   u8 *inst_ratio_str = getenv("AFL_INST_RATIO");
 
   struct timeval  tv;
@@ -608,7 +612,7 @@ int main(int argc, char **argv) {
     exit(1);
 
   }
-
+  // 获取时区和时间
   gettimeofday(&tv, &tz);
 
   rand_seed = tv.tv_sec ^ tv.tv_usec ^ getpid();
@@ -617,12 +621,14 @@ int main(int argc, char **argv) {
     for (j = 0; j < strlen(argv[i]); j++)
       rand_seed += argv[i][j];
 
+  // 初始化随机数种子
   srandom(rand_seed);
 
+  // 修改as参数
   edit_params(argc, argv);
 
   if (inst_ratio_str) {
-
+    // 检测inst_ratio_str的值是否在合法范围内
     if (sscanf(inst_ratio_str, "%u", &inst_ratio) != 1 || inst_ratio > 100) {
 
       FATAL("Bad value of AFL_INST_RATIO (must be between 0 and 100)");
@@ -644,7 +650,8 @@ int main(int argc, char **argv) {
      that... */
 
   if (getenv("AFL_USE_ASAN") || getenv("AFL_USE_MSAN")) {
-
+    /* 在进行ASAN编译时，AFL无法识别处ASAN特定的分支，这会导致插入很多无意义的桩代码
+       所以直接暴力地将桩概率改为1/3 */
     sanitizer = 1;
     if (!getenv("AFL_INST_RATIO")) { inst_ratio /= 3; }
 
@@ -653,14 +660,14 @@ int main(int argc, char **argv) {
   if (!just_version) { add_instrumentation(); }
 
   if (!(pid = fork())) {
-
+    // 生成可执行文件
     execvp(as_params[0], (char **)as_params);
     FATAL("Oops, failed to execute '%s' - check your PATH", as_params[0]);
 
   }
 
   if (pid < 0) { PFATAL("fork() failed"); }
-
+  // 等待子进程执行结束
   if (waitpid(pid, &status, 0) <= 0) { PFATAL("waitpid() failed"); }
 
   if (!getenv("AFL_KEEP_ASSEMBLY")) { unlink(modified_file); }

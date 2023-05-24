@@ -493,7 +493,7 @@ int main(int argc, char **argv_orig, char **envp) {
   rand_set_seed(afl, tv.tv_sec ^ tv.tv_usec ^ getpid());
 
   afl->shmem_testcase_mode = 1;  // we always try to perform shmem fuzzing
-
+  // 获取各种环境配置、选项参数等
   while (
       (opt = getopt(
            argc, argv,
@@ -1994,7 +1994,7 @@ int main(int argc, char **argv_orig, char **envp) {
   #endif
 
   if (afl->shmem_testcase_mode) { setup_testcase_shmem(afl); }
-
+  // 获取开始时间
   afl->start_time = get_cur_time();
 
   if (afl->fsrv.qemu_mode) {

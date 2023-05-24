@@ -120,7 +120,7 @@ static const u8 *trampoline_fmt_32 =
     "movl %%edx,  4(%%esp)\n"
     "movl %%ecx,  8(%%esp)\n"
     "movl %%eax, 12(%%esp)\n"
-    "movl $0x%08x, %%ecx\n"
+    "movl $0x%08x, %%ecx\n" // 向ecx中存入识别代码块的随机桩代码id
     "call __afl_maybe_log\n"
     "movl 12(%%esp), %%eax\n"
     "movl  8(%%esp), %%ecx\n"
@@ -141,7 +141,7 @@ static const u8 *trampoline_fmt_64 =
     "leaq -(128+24)(%%rsp), %%rsp\n"
     "movq %%rdx,  0(%%rsp)\n"
     "movq %%rcx,  8(%%rsp)\n"
-    "movq %%rax, 16(%%rsp)\n"
+    "movq %%rax, 16(%%rsp)\n" // 保存rdx,rcx,rax寄存器
     "movq $0x%08x, %%rcx\n"
     "call __afl_maybe_log\n"
     "movq 16(%%rsp), %%rax\n"
@@ -424,15 +424,15 @@ static const u8 *main_payload_64 =
 #if defined(__OpenBSD__) || (defined(__FreeBSD__) && (__FreeBSD__ < 9))
   "  .byte 0x9f /* lahf */\n"
 #else
-  "  lahf\n"
+  "  lahf\n" // 加载状态标志位到AH, SF,ZF,AF,PF,CF
 #endif                                                 /* ^__OpenBSD__, etc */
-  "  seto  %al\n"
+  "  seto  %al\n" // 溢出置位
   "\n"
   "  /* Check if SHM region is already mapped. */\n"
   "\n"
   "  movq  __afl_area_ptr(%rip), %rdx\n"
   "  testq %rdx, %rdx\n"
-  "  je    __afl_setup\n"
+  "  je    __afl_setup\n" // 如果为NULL,跳转到_afl_setup
   "\n"
   "__afl_store:\n"
   "\n"
@@ -481,7 +481,7 @@ static const u8 *main_payload_64 =
   "  testq %rdx, %rdx\n"
   "  je    __afl_setup_first\n"
   "\n"
-  "  movq %rdx, __afl_area_ptr(%rip)\n"
+  "  movq %rdx, __afl_area_ptr(%rip)\n" // 初始化—__afl_area_ptr
   "  jmp  __afl_store\n" 
   "\n"
   "__afl_setup_first:\n"
@@ -515,7 +515,7 @@ static const u8 *main_payload_64 =
   "  movq %xmm12, 288(%rsp)\n"
   "  movq %xmm13, 304(%rsp)\n"
   "  movq %xmm14, 320(%rsp)\n"
-  "  movq %xmm15, 336(%rsp)\n"
+  "  movq %xmm15, 336(%rsp)\n" // 保存所有寄存器的值，包括xmm寄存器组
   "\n"
   "  /* Map SHM, jumping to __afl_setup_abort if something goes wrong. */\n"
   "\n"
@@ -525,9 +525,9 @@ static const u8 *main_payload_64 =
   "  pushq %r12\n"
   "  movq  %rsp, %r12\n"
   "  subq  $16, %rsp\n"
-  "  andq  $0xfffffffffffffff0, %rsp\n"
+  "  andq  $0xfffffffffffffff0, %rsp\n" // rsp值对齐
   "\n"
-  "  leaq .AFL_SHM_ENV(%rip), %rdi\n"
+  "  leaq .AFL_SHM_ENV(%rip), %rdi\n" // 获取环境变量__AFL_SHM_ID，该环境变量是共享内存的ID
   CALL_L64("getenv")
   "\n"
   "  testq %rax, %rax\n"
@@ -560,7 +560,7 @@ static const u8 *main_payload_64 =
   "  xorq %rdx, %rdx   /* shmat flags    */\n"
   "  xorq %rsi, %rsi   /* requested addr */\n"
   "  movq %rax, %rdi   /* SHM ID         */\n"
-  CALL_L64("shmat")
+  CALL_L64("shmat") // 启用对共享内存的访问
   "\n"
   "  cmpq $-1, %rax\n"
   "  je   __afl_setup_abort\n"
@@ -580,7 +580,7 @@ static const u8 *main_payload_64 =
 #endif                                                        /* ^__APPLE__ */
   "  movq %rax, %rdx\n"
   "\n"
-  "__afl_forkserver:\n"
+  "__afl_forkserver:\n" // 运行__afl_forkserver
   "\n"
   "  /* Enter the fork server mode to avoid the overhead of execve() calls. We\n"
   "     push rdx (area ptr) twice to keep stack alignment neat. */\n"
@@ -596,7 +596,7 @@ static const u8 *main_payload_64 =
   "  movq $4, %rdx               /* length    */\n"
   "  leaq __afl_temp(%rip), %rsi /* data      */\n"
   "  movq $" STRINGIFY((FORKSRV_FD + 1)) ", %rdi       /* file desc */\n"
-  CALL_L64("write")
+  CALL_L64("write") // 向状态管道中写入__afl_temp中的四字节，告诉fork server已经成功启动
   "\n"
   "  cmpq $4, %rax\n"
   "  jne  __afl_fork_resume\n"
@@ -608,7 +608,7 @@ static const u8 *main_payload_64 =
   "  movq $4, %rdx               /* length    */\n"
   "  leaq __afl_temp(%rip), %rsi /* data      */\n"
   "  movq $" STRINGIFY(FORKSRV_FD) ", %rdi             /* file desc */\n"
-  CALL_L64("read")
+  CALL_L64("read") // 等待fuzzer通过控制管道发送过来命令,并读取到__afl_temp中
   "  cmpq $4, %rax\n"
   "  jne  __afl_die\n"
   "\n"
@@ -620,7 +620,7 @@ static const u8 *main_payload_64 =
   CALL_L64("fork")
   "  cmpq $0, %rax\n"
   "  jl   __afl_die\n"
-  "  je   __afl_fork_resume\n"
+  "  je   __afl_fork_resume\n" // fork一个子进程执行__afl_fork_resume
   "\n"
   "  /* In parent process: write PID to pipe, then wait for child. */\n"
   "\n"
@@ -629,12 +629,12 @@ static const u8 *main_payload_64 =
   "  movq $4, %rdx                   /* length    */\n"
   "  leaq __afl_fork_pid(%rip), %rsi /* data      */\n"
   "  movq $" STRINGIFY((FORKSRV_FD + 1)) ", %rdi             /* file desc */\n"
-  CALL_L64("write")
+  CALL_L64("write") // 告知fuzzer pid
   "\n"
   "  movq $0, %rdx                   /* no flags  */\n"
   "  leaq __afl_temp(%rip), %rsi     /* status    */\n"
   "  movq __afl_fork_pid(%rip), %rdi /* PID       */\n"
-  CALL_L64("waitpid")
+  CALL_L64("waitpid") // 等待子进程执行完成
   "  cmpq $0, %rax\n"
   "  jle  __afl_die\n"
   "\n"
@@ -652,7 +652,7 @@ static const u8 *main_payload_64 =
   "  /* In child process: close fds, resume execution. */\n"
   "\n"
   "  movq $" STRINGIFY(FORKSRV_FD) ", %rdi\n"
-  CALL_L64("close")
+  CALL_L64("close") // 关闭子进程中的fd
   "\n"
   "  movq $" STRINGIFY((FORKSRV_FD + 1)) ", %rdi\n"
   CALL_L64("close")
@@ -689,9 +689,9 @@ static const u8 *main_payload_64 =
   "  movq 320(%rsp), %xmm14\n"
   "  movq 336(%rsp), %xmm15\n"
   "\n"
-  "  leaq 352(%rsp), %rsp\n"
+  "  leaq 352(%rsp), %rsp\n" // 恢复子进程的寄存器状态
   "\n"
-  "  jmp  __afl_store\n"
+  "  jmp  __afl_store\n" // 跳转到__afl_store执行
   "\n"
   "__afl_die:\n"
   "\n"
@@ -753,17 +753,17 @@ static const u8 *main_payload_64 =
 
 #else
 
-  "  .lcomm   __afl_area_ptr, 8\n"
+  "  .lcomm   __afl_area_ptr, 8\n" // 共享内存地址
   #ifndef COVERAGE_ONLY
-  "  .lcomm   __afl_prev_loc, 8\n"
+  "  .lcomm   __afl_prev_loc, 8\n" // 上一个插桩位置
   #endif                                                  /* !COVERAGE_ONLY */
-  "  .lcomm   __afl_fork_pid, 4\n"
-  "  .lcomm   __afl_temp, 4\n"
-  "  .lcomm   __afl_setup_failure, 1\n"
+  "  .lcomm   __afl_fork_pid, 4\n" // 由fork产生的子进程的pid
+  "  .lcomm   __afl_temp, 4\n"     // 缓冲区
+  "  .lcomm   __afl_setup_failure, 1\n" // 标志位，如果置位则直接退出
 
 #endif                                                        /* ^__APPLE__ */
 
-  "  .comm    __afl_global_area_ptr, 8, 8\n"
+  "  .comm    __afl_global_area_ptr, 8, 8\n" // 全局指针
   "\n"
   ".AFL_SHM_ENV:\n"
   "  .asciz \"" SHM_ENV_VAR "\"\n"

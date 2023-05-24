@@ -161,13 +161,13 @@ static u8 *find_object(u8 *obj, u8 *argv0) {
   u8 *slash = NULL, *tmp;
 
   if (afl_path) {
-
+    // 如果存在$AFL_PATH
     tmp = alloc_printf("%s/%s", afl_path, obj);
 
     if (debug) DEBUGF("Trying %s\n", tmp);
 
     if (!access(tmp, R_OK)) {
-
+      // 且存在$AFL_PATH/obj 存在，则成功找到该对象
       obj_path = afl_path;
       return tmp;
 
@@ -178,7 +178,7 @@ static u8 *find_object(u8 *obj, u8 *argv0) {
   }
 
   if (argv0) {
-
+    // 在argv[0] 所在目录下寻找对象
     slash = strrchr(argv0, '/');
 
     if (slash) {
@@ -672,7 +672,7 @@ static void process_params(u32 argc, char **argv) {
 }
 
 /* Copy argv to cc_params, making the necessary edits. */
-
+/* 处理传入的编译参数，将确定好的参数放入cc_params[]数组 */
 static void edit_params(u32 argc, char **argv, char **envp) {
 
   cc_params = ck_alloc(1024 * sizeof(u8 *));
@@ -2507,7 +2507,7 @@ int main(int argc, char **argv, char **envp) {
 
   ck_free(ptr);
 #endif
-
+  // 修改编译参数
   edit_params(argc, argv, envp);
 
   if (debug) {
@@ -2524,10 +2524,11 @@ int main(int argc, char **argv, char **envp) {
   if (passthrough) {
 
     argv[0] = cc_params[0];
+    // 执行afl-cc
     execvp(cc_params[0], (char **)argv);
 
   } else {
-
+    // 执行下游编译器
     execvp(cc_params[0], (char **)cc_params);
 
   }
